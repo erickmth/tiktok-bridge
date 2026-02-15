@@ -29,18 +29,19 @@ app.post("/connect", async (req, res) => {
         return res.status(500).json({ error: "Erro ao conectar live" });
     }
 
-    // 🎁 PRESENTE
+    // 🎁 GIFT (PRESENTE)
     connection.on("gift", data => {
         console.log(`🎁 Presente: ${data.giftName} de @${data.uniqueId} (${data.diamondCount} diamantes)`);
         queue.push({
             type: "gift",
             user: data.uniqueId,
             gift: data.giftName,
-            amount: data.repeatCount
+            amount: data.repeatCount || 1,
+            diamondValue: data.diamondCount || 0
         });
     });
 
-    // 👤 FOLLOW
+    // 👤 FOLLOW (SEGUIDOR)
     connection.on("follow", data => {
         console.log(`👤 Novo seguidor: @${data.uniqueId}`);
         queue.push({
@@ -65,11 +66,11 @@ app.post("/connect", async (req, res) => {
         queue.push({
             type: "like",
             user: data.uniqueId,
-            count: data.likeCount
+            count: data.likeCount || 1
         });
     });
 
-    // 🚪 SHARE
+    // 🚪 SHARE (COMPARTILHAMENTO)
     connection.on("share", data => {
         console.log(`📢 Compartilhamento: @${data.uniqueId}`);
         queue.push({
@@ -81,6 +82,12 @@ app.post("/connect", async (req, res) => {
     // ❌ Erros
     connection.on("error", err => {
         console.error(`❌ Erro na live: ${err.message}`);
+    });
+
+    // Disconnect
+    connection.on("disconnected", () => {
+        console.log(`🔴 Desconectado da live: ${username}`);
+        delete streams[serverId];
     });
 
     streams[serverId] = { connection, queue };
