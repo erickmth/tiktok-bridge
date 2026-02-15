@@ -29,16 +29,19 @@ app.post("/connect", async (req, res) => {
 
     // 🎁 PRESENTE
     connection.on("gift", data => {
+        console.log("Presente recebido:", data.giftName);
         queue.push({
             type: "gift",
             user: data.uniqueId,
             gift: data.giftName,
-            amount: data.repeatCount
+            amount: data.repeatCount,
+            diamondValue: data.diamondCount || 0
         });
     });
 
     // 👤 FOLLOW
     connection.on("follow", data => {
+        console.log("Novo seguidor:", data.uniqueId);
         queue.push({
             type: "follow",
             user: data.uniqueId
@@ -47,6 +50,7 @@ app.post("/connect", async (req, res) => {
 
     // 💬 CHAT
     connection.on("chat", data => {
+        console.log("Mensagem:", data.comment);
         queue.push({
             type: "chat",
             user: data.uniqueId,
@@ -56,10 +60,20 @@ app.post("/connect", async (req, res) => {
 
     // ❤️ LIKE
     connection.on("like", data => {
+        console.log("Likes:", data.likeCount);
         queue.push({
             type: "like",
             user: data.uniqueId,
             count: data.likeCount
+        });
+    });
+
+    // 🎉 SHARE
+    connection.on("share", data => {
+        console.log("Compartilhamento:", data.uniqueId);
+        queue.push({
+            type: "share",
+            user: data.uniqueId
         });
     });
 
