@@ -4,11 +4,8 @@ const { WebcastPushConnection } = require("tiktok-live-connector");
 const app = express();
 app.use(express.json());
 
-const streams = {}; // guarda várias lives ao mesmo tempo
+const streams = {};
 
-// =============================
-// CONECTAR LIVE
-// =============================
 app.post("/connect", async (req, res) => {
     const { username, serverId } = req.body;
 
@@ -27,14 +24,42 @@ app.post("/connect", async (req, res) => {
         await connection.connect();
         console.log("Conectado à live:", username);
     } catch (err) {
-        console.error("Erro ao conectar:", err);
         return res.status(500).json({ error: "Erro ao conectar live" });
     }
 
+    // 🎁 PRESENTE
     connection.on("gift", data => {
         queue.push({
+            type: "gift",
             user: data.uniqueId,
-            gift: data.giftName
+            gift: data.giftName,
+            amount: data.repeatCount
+        });
+    });
+
+    // 👤 FOLLOW
+    connection.on("follow", data => {
+        queue.push({
+            type: "follow",
+            user: data.uniqueId
+        });
+    });
+
+    // 💬 CHAT
+    connection.on("chat", data => {
+        queue.push({
+            type: "chat",
+            user: data.uniqueId,
+            message: data.comment
+        });
+    });
+
+    // ❤️ LIKE
+    connection.on("like", data => {
+        queue.push({
+            type: "like",
+            user: data.uniqueId,
+            count: data.likeCount
         });
     });
 
@@ -43,54 +68,27 @@ app.post("/connect", async (req, res) => {
     res.json({ status: "Conectado com sucesso" });
 });
 
-
-// =============================
-// BUSCAR EVENTOS
-// =============================
 app.get("/events/:serverId", (req, res) => {
     const stream = streams[req.params.serverId];
-
     if (!stream) return res.json([]);
 
     const events = [...stream.queue];
-    stream.queue.length = 0; // limpa fila
+    stream.queue.length = 0;
 
     res.json(events);
 });
 
-
-// =============================
-// DESCONECTAR LIVE
-// =============================
 app.post("/disconnect", (req, res) => {
     const { serverId } = req.body;
 
-    if (!serverId) {
-        return res.status(400).json({ error: "ServerId inválido" });
-    }
-
     const stream = streams[serverId];
+    if (!stream) return res.json({ status: "Não estava conectado" });
 
-    if (!stream) {
-        return res.json({ status: "Não estava conectado" });
-    }
-
-    try {
-        stream.connection.disconnect();
-    } catch (err) {
-        console.error("Erro ao desconectar:", err);
-    }
-
+    stream.connection.disconnect();
     delete streams[serverId];
 
     res.json({ status: "Desconectado com sucesso" });
 });
 
-
-// =============================
-// START SERVIDOR
-// =============================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log("Servidor rodando na porta", PORT);
-});
+app.listen(PORT, () => console.log("Servidor rodando na porta", PORT));
