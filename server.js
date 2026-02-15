@@ -6,7 +6,9 @@ app.use(express.json());
 
 const streams = {}; // guarda várias lives ao mesmo tempo
 
-// Conectar live
+// =============================
+// CONECTAR LIVE
+// =============================
 app.post("/connect", async (req, res) => {
     const { username, serverId } = req.body;
 
@@ -25,6 +27,7 @@ app.post("/connect", async (req, res) => {
         await connection.connect();
         console.log("Conectado à live:", username);
     } catch (err) {
+        console.error("Erro ao conectar:", err);
         return res.status(500).json({ error: "Erro ao conectar live" });
     }
 
@@ -40,30 +43,54 @@ app.post("/connect", async (req, res) => {
     res.json({ status: "Conectado com sucesso" });
 });
 
-// Buscar eventos
+
+// =============================
+// BUSCAR EVENTOS
+// =============================
 app.get("/events/:serverId", (req, res) => {
     const stream = streams[req.params.serverId];
+
     if (!stream) return res.json([]);
 
     const events = [...stream.queue];
-    stream.queue = [];
+    stream.queue.length = 0; // limpa fila
+
     res.json(events);
 });
 
 
+// =============================
+// DESCONECTAR LIVE
+// =============================
 app.post("/disconnect", (req, res) => {
-  const { serverId } = req.body;
+    const { serverId } = req.body;
 
-  if (connections[serverId]) {
-    connections[serverId].connection.disconnect();
-    delete connections[serverId];
-    delete giftQueue[serverId];
-  }
+    if (!serverId) {
+        return res.status(400).json({ error: "ServerId inválido" });
+    }
 
-  res.json({ status: "Desconectado com sucesso" });
+    const stream = streams[serverId];
+
+    if (!stream) {
+        return res.json({ status: "Não estava conectado" });
+    }
+
+    try {
+        stream.connection.disconnect();
+    } catch (err) {
+        console.error("Erro ao desconectar:", err);
+    }
+
+    delete streams[serverId];
+
+    res.json({ status: "Desconectado com sucesso" });
 });
 
 
+// =============================
+// START SERVIDOR
+// =============================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Servidor rodando na porta", PORT));
-
+app.listen(PORT, () => {
+    console.log("Servidor rodando na porta", PORT);
+});
