@@ -50,6 +50,20 @@ app.get("/events/:serverId", (req, res) => {
     res.json(events);
 });
 
+
+app.post("/disconnect", (req, res) => {
+  const { serverId } = req.body;
+
+  if (connections[serverId]) {
+    connections[serverId].connection.disconnect();
+    delete connections[serverId];
+    delete giftQueue[serverId];
+  }
+
+  res.json({ status: "Desconectado com sucesso" });
+});
+
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("Servidor rodando na porta", PORT));
 
