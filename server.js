@@ -17,31 +17,32 @@ app.post("/connect", async (req, res) => {
         return res.json({ status: "Já conectado" });
     }
 
+    console.log(`🟢 Tentando conectar à live: ${username}`);
     const connection = new WebcastPushConnection(username);
     const queue = [];
 
     try {
         await connection.connect();
-        console.log("Conectado à live:", username);
+        console.log(`✅ Conectado à live: ${username}`);
     } catch (err) {
+        console.error(`❌ Erro ao conectar: ${err.message}`);
         return res.status(500).json({ error: "Erro ao conectar live" });
     }
 
     // 🎁 PRESENTE
     connection.on("gift", data => {
-        console.log("Presente recebido:", data.giftName);
+        console.log(`🎁 Presente: ${data.giftName} de @${data.uniqueId} (${data.diamondCount} diamantes)`);
         queue.push({
             type: "gift",
             user: data.uniqueId,
             gift: data.giftName,
-            amount: data.repeatCount,
-            diamondValue: data.diamondCount || 0
+            amount: data.repeatCount
         });
     });
 
     // 👤 FOLLOW
     connection.on("follow", data => {
-        console.log("Novo seguidor:", data.uniqueId);
+        console.log(`👤 Novo seguidor: @${data.uniqueId}`);
         queue.push({
             type: "follow",
             user: data.uniqueId
@@ -50,7 +51,7 @@ app.post("/connect", async (req, res) => {
 
     // 💬 CHAT
     connection.on("chat", data => {
-        console.log("Mensagem:", data.comment);
+        console.log(`💬 Chat: @${data.uniqueId}: ${data.comment}`);
         queue.push({
             type: "chat",
             user: data.uniqueId,
@@ -60,7 +61,7 @@ app.post("/connect", async (req, res) => {
 
     // ❤️ LIKE
     connection.on("like", data => {
-        console.log("Likes:", data.likeCount);
+        console.log(`❤️ Likes: ${data.likeCount} de @${data.uniqueId}`);
         queue.push({
             type: "like",
             user: data.uniqueId,
@@ -68,17 +69,21 @@ app.post("/connect", async (req, res) => {
         });
     });
 
-    // 🎉 SHARE
+    // 🚪 SHARE
     connection.on("share", data => {
-        console.log("Compartilhamento:", data.uniqueId);
+        console.log(`📢 Compartilhamento: @${data.uniqueId}`);
         queue.push({
             type: "share",
             user: data.uniqueId
         });
     });
 
-    streams[serverId] = { connection, queue };
+    // ❌ Erros
+    connection.on("error", err => {
+        console.error(`❌ Erro na live: ${err.message}`);
+    });
 
+    streams[serverId] = { connection, queue };
     res.json({ status: "Conectado com sucesso" });
 });
 
@@ -88,7 +93,11 @@ app.get("/events/:serverId", (req, res) => {
 
     const events = [...stream.queue];
     stream.queue.length = 0;
-
+    
+    if (events.length > 0) {
+        console.log(`📤 Enviando ${events.length} eventos para o Roblox`);
+    }
+    
     res.json(events);
 });
 
@@ -100,9 +109,10 @@ app.post("/disconnect", (req, res) => {
 
     stream.connection.disconnect();
     delete streams[serverId];
+    console.log(`🔴 Desconectado: ${serverId}`);
 
     res.json({ status: "Desconectado com sucesso" });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Servidor rodando na porta", PORT));
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
