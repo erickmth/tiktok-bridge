@@ -6,6 +6,21 @@ app.use(express.json());
 
 const streams = {};
 
+// Verificar streams inativas a cada minuto (NOVO)
+setInterval(() => {
+    const now = Date.now();
+    for (const [serverId, stream] of Object.entries(streams)) {
+        // Se não houve atividade em 2 minutos, considera inativo
+        if (stream.lastActivity && (now - stream.lastActivity) > 120000) {
+            console.log(`🧹 Removendo stream inativa: ${serverId}`);
+            try {
+                stream.connection.disconnect();
+            } catch (e) {}
+            delete streams[serverId];
+        }
+    }
+}, 60000); // Verificar a cada minuto
+
 app.post("/connect", async (req, res) => {
     const { username, serverId } = req.body;
 
@@ -90,13 +105,16 @@ app.post("/connect", async (req, res) => {
         delete streams[serverId];
     });
 
-    streams[serverId] = { connection, queue };
+    streams[serverId] = { connection, queue, lastActivity: Date.now() };
     res.json({ status: "Conectado com sucesso" });
 });
 
 app.get("/events/:serverId", (req, res) => {
     const stream = streams[req.params.serverId];
     if (!stream) return res.json([]);
+    
+    // Atualizar última atividade (NOVO)
+    stream.lastActivity = Date.now();
 
     const events = [...stream.queue];
     stream.queue.length = 0;
@@ -108,17 +126,48 @@ app.get("/events/:serverId", (req, res) => {
     res.json(events);
 });
 
+// Endpoint para desconectar (MELHORADO)
 app.post("/disconnect", (req, res) => {
-    const { serverId } = req.body;
+    const { serverId, username } = req.body;
+    console.log(`🔌 Requisição para desconectar: serverId=${serverId}, username=${username}`);
 
     const stream = streams[serverId];
-    if (!stream) return res.json({ status: "Não estava conectado" });
+    if (!stream) {
+        console.log(`⚠️ ServerId ${serverId} não encontrado, pode já ter sido desconectado`);
+        return res.json({ status: "Não estava conectado" });
+    }
 
-    stream.connection.disconnect();
-    delete streams[serverId];
-    console.log(`🔴 Desconectado: ${serverId}`);
+    try {
+        // Desconectar a conexão
+        stream.connection.disconnect();
+        
+        // Remover dos streams ativos
+        delete streams[serverId];
+        
+        console.log(`✅ Desconectado com sucesso: ${username} (${serverId})`);
+        res.json({ status: "Desconectado com sucesso" });
+    } catch (err) {
+        console.error(`❌ Erro ao desconectar: ${err.message}`);
+        // Mesmo com erro, removemos dos streams ativos
+        delete streams[serverId];
+        res.json({ status: "Erro na desconexão, mas removido" });
+    }
+});
 
-    res.json({ status: "Desconectado com sucesso" });
+// ENDPOINT PARA LIMPEZA MANUAL (NOVO)
+app.post("/cleanup", (req, res) => {
+    const { serverId } = req.body;
+    
+    // Remove qualquer stream órfão
+    if (streams[serverId]) {
+        try {
+            streams[serverId].connection.disconnect();
+        } catch (e) {}
+        delete streams[serverId];
+        console.log(`🧹 Cleanup: removido stream ${serverId}`);
+    }
+    
+    res.json({ status: "Cleanup realizado" });
 });
 
 const PORT = process.env.PORT || 3000;
